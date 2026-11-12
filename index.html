@@ -221,6 +221,23 @@ footer .in{border-top:1px solid var(--rule); padding-top:1rem}
 .tile.pre{opacity:0; transform:translateY(12px)}
 .tile{transition:opacity .8s ease, transform .8s ease}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* 한 화면에 한 항목 + 스크롤 스냅 (데스크톱) */
+.sticky-head{text-align:center}
+.sticky-head h2{margin-bottom:.4rem}
+.sticky-head .intro{margin:0 auto 1.4rem}
+@media (min-width:861px){
+  html{scroll-snap-type:y proximity}
+  .hero,.band{min-height:calc(100vh - var(--nav) - 40px); display:flex; flex-direction:column; justify-content:center; scroll-snap-align:start}
+  .hero > *,.band > *{width:100%}
+  .band{padding-top:4.5rem; padding-bottom:4.5rem}
+  .snap-pt{position:absolute; left:0; width:1px; height:1px; pointer-events:none; scroll-snap-align:start; top:calc(var(--nav) + 80vh * (var(--i) + .25))}
+  .snap-pt.first{top:0}
+}
+@media (max-width:760px){
+  .sticky-head h2{font-size:1.5rem}
+  .sticky-head .intro{display:none}
+  .sticky-head h2{margin-bottom:.8rem}
+}
 </style>
 </head>
 <body>
@@ -240,14 +257,13 @@ footer .in{border-top:1px solid var(--rule); padding-top:1rem}
   <p class="by">미니 프로젝트 보고서 · 송예진</p>
 </header>
 
-<div class="scroll-head" id="explore">
-  <div class="narrow">
-    <h2>k에 따라 달라지는 정확도.</h2>
-    <p class="intro" style="margin-bottom:0">스크롤하면 구간별로 무슨 일이 일어나는지 볼 수 있습니다.</p>
-  </div>
-</div>
 <div class="scrolly" id="scrolly">
+  <span class="snap-pt first" id="explore"></span><span class="snap-pt" style="--i:1"></span><span class="snap-pt" style="--i:2"></span><span class="snap-pt" style="--i:3"></span>
   <div class="sticky">
+    <div class="sticky-head">
+      <h2>k에 따라 달라지는 정확도.</h2>
+      <p class="intro">스크롤하면 구간별로 무슨 일이 일어나는지 볼 수 있습니다.</p>
+    </div>
     <div style="text-align:center">
       <ul class="seg" role="tablist" aria-label="결과 단계">
         <li><button role="tab" aria-selected="true" data-step="0">작은 k</button></li>
@@ -481,7 +497,7 @@ print(scaled_scores[12])    # 0.9737 (k = 13)</code></pre></div>
       </div>
     </div>
     <div class="narrow">
-      <p class="fine">학습용 미니 프로젝트의 결과물이며, 실제 진단에 사용할 수 없습니다.</p>
+      <p class="fine" style="margin-top:2rem">학습용 미니 프로젝트의 결과물이며, 실제 진단에 사용할 수 없습니다.</p>
     </div>
   </div>
 </section>
