@@ -128,7 +128,9 @@ ul{padding-left:1.2rem; margin:0 0 1rem} li{margin-bottom:.6rem}
 /* 마무리 */
 .closing{padding:7rem 1.4rem; text-align:center}
 .closing .big{font-size:clamp(2.2rem,7vw,4rem); font-weight:700; letter-spacing:-0.035em; line-height:1.1; margin:0 0 1.4rem}
-.closing .big span{display:block; color:var(--faint)}
+.closing .big span{display:block; color:var(--pink)}
+.closing .big span.l2{color:var(--ink)}
+.closing .big .pk{color:var(--pink); font-weight:inherit}
 .fine{font-size:.8rem; color:var(--faint); line-height:1.6}
 footer{background:var(--band); padding:1.4rem; font-size:.75rem; color:var(--faint)}
 footer .in{border-top:1px solid var(--rule); padding-top:1rem}
@@ -521,7 +523,7 @@ print(scaled_scores[12])    # 0.9737 (k = 13)</code></pre></div>
 </section>
 
 <section class="closing band">
-  <p class="big">k = 13에서 94.74%.<span>표준화하면 같은 k에서 97.37%.</span></p>
+  <p class="big">k = 13에서 94.74%.<span class="l2"><b class="pk">표준화</b>하면 같은 k에서 <b class="pk">97.37%.</b></span></p>
   <p class="fine">* 이 보고서는 학습용 미니 프로젝트이며, 모델의 판정 결과를 실제 진단에 사용할 수 없습니다.</p>
 </section>
 
