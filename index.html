@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kNN 유방암 진단 보조 시스템 — k값 탐색 보고서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFFFFF; --band:#F5F5F7; --ink:#1D1D1F; --muted:#6E6E73; --faint:#86868B;
+  --rule:#D2D2D7; --blue:#0071E3; --blue-soft:#E8F1FC; --pink:#E3194B; --pink-soft:#FDE8EE;
+  --nav:48px;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{background:var(--bg); scroll-padding-top:calc(env(safe-area-inset-top,0px) + var(--nav))}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:17px; line-height:1.6; letter-spacing:-0.01em; word-break:keep-all;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:30; background:rgba(255,255,255,.8); backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px)}
+
+/* 상단 내비게이션 */
+.gnav{position:sticky; top:env(safe-area-inset-top,0px); z-index:20; height:var(--nav); background:rgba(255,255,255,.8); backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px); border-bottom:1px solid rgba(0,0,0,.08)}
+.gnav .in{max-width:980px; margin:0 auto; height:100%; padding:0 1.4rem; display:flex; align-items:center; justify-content:space-between; gap:1rem}
+.gnav .title{font-size:1.15rem; font-weight:600; letter-spacing:-0.02em; white-space:nowrap}
+.gnav nav{display:flex; gap:1.4rem; overflow-x:auto}
+.gnav nav a{color:var(--ink); text-decoration:none; font-size:.8rem; opacity:.8; white-space:nowrap}
+.gnav nav a:hover{opacity:1}
+
+/* 공통 */
+.band{padding:6.5rem 1.4rem}
+.band.gray{background:var(--band)}
+.in{max-width:980px; margin:0 auto}
+.narrow{max-width:692px; margin:0 auto}
+.center{text-align:center}
+h1,h2,h3{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Apple SD Gothic Neo","Noto Sans KR",sans-serif; margin:0}
+.kicker{font-size:1.3rem; font-weight:600; color:var(--pink); margin:0 0 .6rem; letter-spacing:-0.01em}
+h2{font-size:clamp(2rem,5.5vw,3rem); font-weight:700; line-height:1.1; letter-spacing:-0.025em; margin-bottom:1.1rem}
+.intro{font-size:clamp(1.05rem,2.4vw,1.3rem); color:var(--muted); line-height:1.5; margin:0 auto 3rem; max-width:40rem}
+.intro b{color:var(--ink); font-weight:600}
+p{margin:0 0 1rem}
+strong{font-weight:600}
+a{color:var(--blue)}
+.more{display:inline-block; color:var(--blue); text-decoration:none; font-size:1.05rem}
+.more:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--blue); outline-offset:3px; border-radius:4px}
+
+/* 히어로 */
+.hero{padding:6rem 1.4rem 5rem; text-align:center}
+.hero .name{font-size:1.4rem; font-weight:600; margin:0 0 .5rem}
+.hero h1{font-size:clamp(3rem,10vw,5.6rem); font-weight:700; line-height:1.05; letter-spacing:-0.035em; margin:0 0 1.2rem}
+.hero .sub{font-size:clamp(1.1rem,2.8vw,1.5rem); color:var(--muted); line-height:1.45; max-width:36rem; margin:0 auto 1.8rem}
+.hero .links{display:flex; gap:2rem; justify-content:center; flex-wrap:wrap}
+.hero .by{margin-top:3rem; font-size:.85rem; color:var(--faint)}
+
+/* 숫자 타일 */
+.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.2rem; margin:0 0 3rem}
+.tile{background:var(--bg); border-radius:24px; padding:2rem 1.6rem; text-align:center}
+.band:not(.gray) .tile{background:var(--band)}
+.tile .big{font-size:clamp(2.4rem,5vw,3.2rem); font-weight:700; letter-spacing:-0.03em; line-height:1.1; font-variant-numeric:tabular-nums}
+.tile .big.b{color:var(--blue)} .tile .big.p{color:var(--pink)}
+.tile .lbl{color:var(--muted); font-size:.95rem; margin-top:.4rem}
+
+/* 스크롤 단계 */
+.scroll-head{padding:6.5rem 1.4rem 0; background:var(--band); text-align:center}
+.scrolly{position:relative; height:420vh; background:var(--band)}
+.sticky{position:sticky; top:calc(env(safe-area-inset-top,0px) + var(--nav)); height:calc(100vh - var(--nav)); height:calc(100svh - var(--nav) - env(safe-area-inset-top,0px)); display:flex; flex-direction:column; justify-content:center; padding:1rem 1.4rem}
+.seg{display:inline-flex; background:#E8E8ED; border-radius:999px; padding:4px; gap:2px; margin:0 auto 1.6rem; list-style:none; max-width:100%; overflow-x:auto}
+.seg button{font:inherit; font-size:.92rem; font-weight:500; color:var(--ink); background:transparent; border:0; border-radius:999px; padding:.45rem 1.2rem; cursor:pointer; white-space:nowrap; transition:background-color .25s, box-shadow .25s}
+.seg button[aria-selected="true"]{background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.stage{max-width:980px; width:100%; margin:0 auto; display:grid; grid-template-columns:minmax(0,17rem) minmax(0,1fr); gap:2.4rem; align-items:center; background:#fff; border-radius:28px; padding:2.2rem 2rem 1.8rem}
+.copy{position:relative; min-height:12rem}
+.copy article{position:absolute; inset:0; opacity:0; transition:opacity .4s ease; pointer-events:none}
+.copy article.on{opacity:1; pointer-events:auto}
+.copy h3{font-size:1.6rem; font-weight:700; letter-spacing:-0.025em; line-height:1.2; margin:0 0 .8rem}
+.copy p{font-size:1rem; color:var(--muted)}
+.readout{display:flex; flex-wrap:wrap; gap:1.6rem; align-items:flex-end; margin-bottom:.6rem}
+.readout .k{font-size:2.3rem; font-weight:700; letter-spacing:-0.03em; line-height:1}
+.readout .acc{font-size:1.3rem; font-weight:600; color:var(--blue); font-variant-numeric:tabular-nums}
+.readout .acc small{display:block; font-size:.78rem; font-weight:400; color:var(--muted)}
+.readout .acc.scaled{color:var(--pink)}
+svg.chart{width:100%; height:auto; display:block}
+.chart .grid{stroke:#E8E8ED; stroke-width:1}
+.chart .axis text{fill:var(--faint); font-size:11px; font-family:inherit}
+.chart .raw{fill:none; stroke:var(--blue); stroke-width:2.4}
+.chart .scl{fill:none; stroke:var(--pink); stroke-width:2.4; transition:opacity .4s}
+.chart .region{fill:var(--blue-soft); transition:x .45s ease, width .45s ease, opacity .3s}
+.chart .cursor{stroke:var(--ink); stroke-width:1; stroke-dasharray:3 3; opacity:.35}
+.chart .dot-raw{fill:var(--blue)} .chart .dot-scl{fill:var(--pink)}
+.chart .best{fill:#fff; stroke:var(--blue); stroke-width:2}
+.controls{display:flex; flex-wrap:wrap; gap:.8rem 1.2rem; align-items:center; margin-top:.6rem}
+.controls label{font-size:.85rem; color:var(--muted)}
+input[type=range]{flex:1 1 14rem; accent-color:var(--blue); min-height:28px}
+.progress{max-width:980px; width:100%; margin:1.2rem auto 0; height:3px; background:#E8E8ED; border-radius:3px; overflow:hidden}
+.progress i{display:block; height:100%; width:0; background:var(--ink)}
+
+/* 표 · 코드 */
+.card{background:var(--bg); border-radius:24px; padding:1.6rem 1.6rem 1rem}
+.band:not(.gray) .card{background:var(--band)}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:.95rem; min-width:26rem}
+th,td{padding:.8rem .6rem; text-align:left; border-bottom:1px solid #E8E8ED}
+tr:last-child td{border-bottom:0}
+th{font-weight:500; color:var(--faint); font-size:.85rem}
+td.num,th.num{text-align:right; font-variant-numeric:tabular-nums}
+pre{margin:0; overflow-x:auto; font-size:.86rem; line-height:1.65}
+code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.92em}
+.body-text{margin-top:2.4rem}
+ul{padding-left:1.2rem; margin:0 0 1rem} li{margin-bottom:.6rem}
+
+/* 혼동행렬 */
+.cm{display:grid; grid-template-columns:auto 1fr 1fr; gap:10px; max-width:30rem; margin:0 auto 2.4rem; font-size:.9rem}
+.cm .h{color:var(--muted); display:flex; align-items:center; justify-content:center; text-align:center; padding:.3rem}
+.cm .h.row{justify-content:flex-end; padding-right:.6rem}
+.cm .cell{border-radius:20px; padding:1.3rem .5rem; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums}
+.cm .cell b{display:block; font-size:2rem; font-weight:700; line-height:1.15; letter-spacing:-0.02em}
+.cm .ok{background:var(--blue-soft)} .cm .ok b{color:var(--blue)}
+.cm .bad{background:var(--pink-soft)} .cm .bad b{color:var(--pink)}
+
+/* 마무리 */
+.closing{padding:7rem 1.4rem; text-align:center}
+.closing .big{font-size:clamp(2.2rem,7vw,4rem); font-weight:700; letter-spacing:-0.035em; line-height:1.1; margin:0 0 1.4rem}
+.closing .big span{display:block; color:var(--faint)}
+.fine{font-size:.8rem; color:var(--faint); line-height:1.6}
+footer{background:var(--band); padding:1.4rem; font-size:.75rem; color:var(--faint)}
+footer .in{border-top:1px solid var(--rule); padding-top:1rem}
+
+@media (max-width:760px){
+  .band{padding:4.5rem 1.2rem}
+  .gnav nav{display:none}
+  .stage{grid-template-columns:1fr; gap:.8rem; padding:1.2rem 1.1rem 1rem; border-radius:22px}
+  .copy{min-height:8.5rem}
+  .copy h3{font-size:1.2rem; margin-bottom:.4rem}
+  .copy p{font-size:.88rem; margin:0}
+  .readout{gap:1.1rem}
+  .readout .k{font-size:1.7rem}
+  .readout .acc{font-size:1.05rem}
+  .seg button{font-size:.82rem; padding:.4rem .85rem}
+  .sticky{padding:.6rem 1rem}
+}
+/* 방법: 코드 두 개 가로 배치 */
+.code-pair{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.2rem; align-items:stretch}
+.code-pair pre{font-size:.8rem}
+@media (max-width:860px){.code-pair{grid-template-columns:minmax(0,1fr)}}
+
+/* 결과: 114칸 정답 그리드 */
+.answers{max-width:560px; margin:0 auto 3rem}
+.answers .grid{display:grid; grid-template-columns:repeat(19,1fr); gap:4px}
+.answers .grid i{aspect-ratio:1; border-radius:3px; background:#E3E3E8; transition:background-color .35s ease}
+.answers.go .grid i.ok{background:var(--blue)}
+.answers.go .grid i.bad{background:var(--pink)}
+.answers .legend{display:flex; justify-content:center; flex-wrap:wrap; gap:.4rem 1.4rem; margin-top:1rem; font-size:.88rem; color:var(--muted)}
+.answers .legend span::before{content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:.45rem; vertical-align:-1px; background:var(--blue)}
+.answers .legend span.bad::before{background:var(--pink)}
+
+/* 표준화: 화살표 연결 */
+.tiles.compare{grid-template-columns:1fr auto 1fr; align-items:center}
+.arrow{display:flex; flex-direction:column; align-items:center; gap:.35rem; width:120px}
+.arrow svg{width:100%; height:24px; overflow:visible}
+.arrow path{fill:none; stroke:var(--ink); stroke-width:3.5; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:100; stroke-dashoffset:100; transition:stroke-dashoffset .6s ease .6s}
+.arrow path.head{transition-duration:.2s; transition-delay:1.2s}
+.arrow .gain{font-weight:600; color:var(--pink); font-variant-numeric:tabular-nums; opacity:0; transition:opacity .5s ease 2.1s}
+.compare .tile{transition:none}
+.compare.anim .tile{opacity:0}
+.compare.anim.go .tile{animation:tileRise .7s cubic-bezier(.2,.7,.2,1) both}
+.compare.anim.go .tile:last-child{animation-delay:1.4s}
+@keyframes tileRise{from{opacity:0; transform:translateY(28px) scale(.96)} to{opacity:1; transform:none}}
+.compare.go .arrow path{stroke-dashoffset:0}
+.compare.go .arrow .gain{opacity:1}
+@media (max-width:760px){
+  .tiles.compare{grid-template-columns:1fr}
+  .arrow{width:auto; margin:0 auto}
+  .arrow svg{width:60px; transform:rotate(90deg); margin:18px 0}
+  .answers .grid{gap:3px}
+}
+
+.tile.pre{opacity:0; transform:translateY(12px)}
+.tile{transition:opacity .8s ease, transform .8s ease}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="gnav"><div class="in">
+  <span class="title">kNN 진단 보조</span>
+  <nav aria-label="보고서 목차">
+    <a href="#explore">결과 한눈에</a><a href="#overview">개요</a><a href="#data">데이터</a><a href="#method">방법</a><a href="#result">결과</a><a href="#detail">상세</a><a href="#scaling">표준화</a><a href="#conclusion">결론</a>
+  </nav>
+</div></div>
+
+<header class="hero">
+  <p class="name">유방암 진단 보조 시스템</p>
+  <h1>최적의 k, 13.</h1>
+  <p class="sub">k를 1부터 100까지 바꿔 가며 kNN 분류기를 테스트했습니다. 가장 정확한 이웃의 수는 13이었습니다.</p>
+  <div class="links"><a class="more" href="#explore">결과 보기 ›</a><a class="more" href="#method">코드 보기 ›</a></div>
+  <p class="by">미니 프로젝트 보고서 · 송예진</p>
+</header>
+
+<div class="scroll-head" id="explore">
+  <div class="narrow">
+    <h2>k에 따라 달라지는 정확도.</h2>
+    <p class="intro" style="margin-bottom:0">스크롤하면 구간별로 무슨 일이 일어나는지 볼 수 있습니다.</p>
+  </div>
+</div>
+<div class="scrolly" id="scrolly">
+  <div class="sticky">
+    <div style="text-align:center">
+      <ul class="seg" role="tablist" aria-label="결과 단계">
+        <li><button role="tab" aria-selected="true" data-step="0">작은 k</button></li>
+        <li><button role="tab" aria-selected="false" data-step="1">최적의 k</button></li>
+        <li><button role="tab" aria-selected="false" data-step="2">큰 k</button></li>
+        <li><button role="tab" aria-selected="false" data-step="3">표준화</button></li>
+      </ul>
+    </div>
+    <div class="stage">
+      <div class="copy" aria-live="polite">
+        <article class="on"><h3>k가 작으면 결과가 흔들립니다.</h3><p>k = 1~8에서는 가까운 데이터 한두 개에 판정이 좌우됩니다. 정확도가 90.4~93.0% 사이에서 들쭉날쭉한 과대적합 구간입니다.</p></article>
+        <article><h3>k = 13에서 정확도 94.74%.</h3><p>k = 9~30 구간이 가장 높고 안정적입니다. 그중 k = 13이 테스트 114개 중 108개를 맞혀 최고 정확도를 기록했습니다.</p></article>
+        <article><h3>k가 크면 경계가 흐려집니다.</h3><p>k가 31 이상이면 멀리 있는 데이터까지 투표에 참여합니다. 정확도가 91.2~93.0%로 내려가는 과소적합 구간입니다.</p></article>
+        <article><h3>표준화하면 98.25%까지.</h3><p>특성을 StandardScaler로 표준화하자 곡선 전체가 위로 올라갔습니다. 최고 정확도는 k = 3, 17, 18에서 98.25%입니다.</p></article>
+      </div>
+      <div>
+        <div class="readout">
+          <div class="k" id="kOut">k = 1</div>
+          <div class="acc" id="accRaw">92.11%<small>원본 데이터 정확도</small></div>
+          <div class="acc scaled" id="accScl" hidden>93.86%<small>표준화 후 정확도</small></div>
+        </div>
+        <svg class="chart" id="chart" viewBox="0 0 720 300" role="img" aria-label="k값에 따른 테스트 정확도 꺾은선 그래프. 원본 데이터는 k=13에서 최고 94.74%, 표준화 후에는 최고 98.25%."></svg>
+        <div class="controls">
+          <label for="kRange">k 직접 바꿔 보기</label>
+          <input type="range" id="kRange" min="1" max="100" value="1">
+        </div>
+      </div>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+  </div>
+</div>
+
+<section class="band" id="overview">
+  <div class="narrow center">
+    <p class="kicker">프로젝트 개요</p>
+    <h2>가까운 이웃에게 물어보는 진단.</h2>
+    <p class="intro">세포 검사 수치로 종양이 <b>악성</b>인지 <b>양성</b>인지 판별합니다. kNN은 새 데이터와 가장 가까운 학습 데이터 k개를 찾아 다수결로 답을 정합니다.</p>
+  </div>
+  <div class="narrow">
+    <div class="card">
+      <p style="margin-bottom:.6rem"><strong>이번 프로젝트의 목표</strong></p>
+      <ul>
+        <li><code>KNeighborsClassifier(n_neighbors=k)</code>에서 k를 1부터 100까지 바꿔 가며 테스트하기</li>
+        <li>테스트 정확도가 가장 높은 k 찾기</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="band gray" id="data">
+  <div class="in">
+    <div class="narrow center">
+      <p class="kicker">데이터</p>
+      <h2>569개의 샘플, 30가지 단서.</h2>
+      <p class="intro"><code>load_breast_cancer()</code>로 불러온 위스콘신 유방암 진단 데이터입니다. 세포핵의 반지름, 질감, 둘레, 면적 등을 평균, 표준오차, 최악값(가장 큰 값 3개의 평균)으로 정리했습니다.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="big">569</div><div class="lbl">전체 샘플</div></div>
+      <div class="tile"><div class="big">30</div><div class="lbl">특성</div></div>
+      <div class="tile"><div class="big p">212</div><div class="lbl">악성 (37.3%)</div></div>
+      <div class="tile"><div class="big b">357</div><div class="lbl">양성 (62.7%)</div></div>
+    </div>
+    <div class="narrow">
+      <p>학습용 455개, 테스트용 114개로 나눴습니다. 특성마다 값의 범위 차이가 매우 커서, 평균 면적은 143.5~2501.0인데 평균 프랙탈 차원은 0.050~0.097 사이입니다. 거리로 판단하는 kNN에서는 이 차이가 결과에 영향을 주기 때문에 표준화 실험에서 따로 살펴봤습니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="method">
+  <div class="narrow center">
+    <p class="kicker">실험 방법</p>
+    <h2>k를 100번 바꿔서.</h2>
+    <p class="intro">데이터를 8:2로 나누고, <code>stratify=y</code>로 악성·양성 비율을 맞췄습니다. <code>random_state=42</code>로 고정해 언제 다시 돌려도 같은 결과가 나옵니다.</p>
+  </div>
+  <div class="in code-pair">
+    <div class="card"><p style="margin-bottom:.8rem"><strong>기본 실험 코드</strong></p><pre><code>from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+
+cancer = load_breast_cancer()
+X_train, X_test, y_train, y_test = train_test_split(
+    cancer.data, cancer.target,
+    test_size=0.2, stratify=cancer.target, random_state=42)
+
+scores = []
+for k in range(1, 101):
+    model = KNeighborsClassifier(n_neighbors=k)
+    model.fit(X_train, y_train)
+    scores.append(model.score(X_test, y_test))
+
+best_k = scores.index(max(scores)) + 1   # 13</code></pre></div>
+    <div class="card"><p style="margin-bottom:.8rem"><strong>표준화 실험 코드</strong></p><pre><code>from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler().fit(X_train)   # 학습 데이터로만 맞춤
+X_train_s = scaler.transform(X_train)
+X_test_s = scaler.transform(X_test)
+
+scaled_scores = []
+for k in range(1, 101):
+    model = KNeighborsClassifier(n_neighbors=k)
+    model.fit(X_train_s, y_train)
+    scaled_scores.append(model.score(X_test_s, y_test))
+
+print(max(scaled_scores))   # 0.9825 (k = 3, 17, 18)
+print(scaled_scores[12])    # 0.9737 (k = 13)</code></pre></div>
+  </div>
+</section>
+
+<section class="band gray" id="result">
+  <div class="in">
+    <div class="narrow center">
+      <p class="kicker">결과</p>
+      <h2>너무 적지도, 많지도 않게.</h2>
+      <p class="intro">100개의 k 가운데 <b>k = 13</b>이 유일하게 최고 정확도를 기록했습니다.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="big">13</div><div class="lbl">최적의 k</div></div>
+      <div class="tile"><div class="big b">94.74%</div><div class="lbl">테스트 정확도</div></div>
+      <div class="tile"><div class="big">108/114</div><div class="lbl">맞힌 테스트 샘플</div></div>
+    </div>
+    <div class="answers" id="answers" role="img" aria-label="테스트 샘플 114개 중 108개 정답, 6개 오답">
+      <div class="grid"></div>
+      <div class="legend"><span>정답 108개</span><span class="bad">오답 6개 (악성 놓침 4 · 오경보 2)</span></div>
+    </div>
+    <div class="narrow">
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>k 구간</th><th class="num">정확도 범위</th><th>해석</th></tr></thead>
+          <tbody>
+            <tr><td>1 ~ 8</td><td class="num">90.4 ~ 93.0%</td><td>이웃이 너무 적어 노이즈에 흔들림 (과대적합)</td></tr>
+            <tr><td>9 ~ 30</td><td class="num">93.0 ~ 94.7%</td><td>가장 안정적인 구간, 최고점 k=13 포함</td></tr>
+            <tr><td>31 ~ 100</td><td class="num">91.2 ~ 93.0%</td><td>너무 많은 이웃이 투표에 참여해 경계가 흐려짐 (과소적합)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body-text">k가 작으면 바로 옆 데이터 한두 개에 따라 판정이 바뀌어 결과가 들쭉날쭉하고, k가 커지면 멀리 있는 데이터까지 투표에 참여해 개수가 많은 양성 쪽으로 판정이 쏠립니다. 그 사이 어딘가에 균형점이 있다는 kNN의 전형적인 모습이 그대로 나타났습니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="detail">
+  <div class="narrow center">
+    <p class="kicker">k = 13 모델 자세히 보기</p>
+    <h2>정확도 뒤에 숨은 4개.</h2>
+    <p class="intro">혼동행렬로 어떤 실수를 했는지 확인했습니다. 실제 악성 42개 중 <b>4개를 양성으로 놓쳤습니다.</b></p>
+  </div>
+  <div class="cm" role="table" aria-label="k=13 혼동행렬">
+    <div class="h"></div><div class="h">예측: 악성</div><div class="h">예측: 양성</div>
+    <div class="h row">실제: 악성</div><div class="cell ok"><b>38</b>정답</div><div class="cell bad"><b>4</b>악성을 놓침</div>
+    <div class="h row">실제: 양성</div><div class="cell bad"><b>2</b>오경보</div><div class="cell ok"><b>70</b>정답</div>
+  </div>
+  <div class="narrow">
+    <div class="card table-wrap">
+      <table>
+        <thead><tr><th>클래스</th><th class="num">정밀도</th><th class="num">재현율</th><th class="num">F1</th></tr></thead>
+        <tbody>
+          <tr><td>악성</td><td class="num">95.0%</td><td class="num">90.5%</td><td class="num">92.7%</td></tr>
+          <tr><td>양성</td><td class="num">94.6%</td><td class="num">97.2%</td><td class="num">95.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="body-text">진단 보조 시스템에서는 양성을 악성으로 의심하는 오경보보다 악성을 놓치는 경우가 훨씬 위험합니다. 그래서 전체 정확도와 함께 <strong>악성 재현율 90.5%</strong>를 반드시 따져봐야 합니다.</p>
+  </div>
+</section>
+
+<section class="band gray" id="scaling">
+  <div class="in">
+    <div class="narrow center">
+      <p class="kicker">추가 실험</p>
+      <h2>단위를 맞추자 달라졌다.</h2>
+      <p class="intro">값이 큰 특성이 거리 계산을 독차지하지 않도록 <code>StandardScaler</code>로 모든 특성을 평균 0, 표준편차 1로 맞췄습니다. 스케일러는 학습 데이터로만 맞췄습니다.</p>
+    </div>
+    <div class="tiles compare" id="compare">
+      <div class="tile"><div class="big b">94.74%</div><div class="lbl">원본 데이터 최고 정확도 (k = 13)</div></div>
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 120 24"><path d="M5 12 H108" pathLength="100"/><path class="head" d="M99 3 L111 12 L99 21" pathLength="100"/></svg><span class="gain">+3.51%p</span></div>
+      <div class="tile"><div class="big p">98.25%</div><div class="lbl">표준화 후 최고 정확도 (k = 3, 17, 18)</div></div>
+    </div>
+    <div class="narrow">
+      <p>표준화만으로 최고 정확도가 약 3.5%p 올랐고, k = 27 이후로도 94.7% 아래로 떨어지지 않을 만큼 곡선 전체가 높고 안정적이었습니다. 같은 k = 13에서도 97.37%였습니다. 다만 최적 k가 13에서 3·17·18로 바뀌었다는 점은, 최적 k가 전처리 방식에 따라 달라지는 값이라는 것을 보여 줍니다. 또한 98.25%는 테스트 데이터를 보고 고른 k에서 나온 최고값이라 실제 성능보다 조금 낙관적일 수 있어서, 원본과 같은 조건인 k = 13의 97.37%로 비교하는 것이 더 공정합니다. 두 곡선은 <a href="#explore">맨 위 그래프</a>의 표준화 단계에서 비교할 수 있습니다.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="conclusion">
+  <div class="narrow center">
+    <p class="kicker">결론과 한계</p>
+    <h2>k 선택만큼 중요한 전처리.</h2>
+    <p class="intro">원본 데이터에서 최적 k는 <b>13</b>, 정확도는 <b>94.74%</b>였습니다. 표준화를 적용하면 같은 k = 13에서 <b>97.37%</b>, 최고 <b>98.25%</b>까지 올라, kNN에서는 전처리가 k 선택만큼 중요하다는 것을 확인했습니다.</p>
+  </div>
+  <div class="narrow">
+    <div class="card">
+      <p style="margin-bottom:.6rem"><strong>이번 실험의 한계</strong></p>
+      <ul>
+        <li>테스트 세트를 한 번만 나눠 평가했기 때문에, <code>random_state</code>를 바꾸면 최적 k가 달라질 수 있습니다. 교차검증(<code>cross_val_score</code>)으로 여러 번 평균을 내면 더 믿을 만한 k를 고를 수 있습니다.</li>
+        <li>테스트 데이터로 k를 고르면 그 데이터에 맞춰진 결과가 되므로, 엄밀하게는 검증 세트로 k를 정하고 테스트 세트는 마지막에 한 번만 써야 합니다. 표준화 후의 최고 정확도 98.25%도 같은 이유로 실제 성능보다 조금 높게 나왔을 수 있습니다.</li>
+        <li>의료 현장에서는 정확도보다 악성 재현율이 중요합니다. 실제 활용을 생각한다면 악성을 놓치지 않는 쪽으로 판정 기준을 조정하는 방법도 검토해야 합니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="closing band gray">
+  <p class="big">k = 13에서 94.74%.<span>표준화하면 같은 k에서 97.37%.</span></p>
+  <p class="fine">이 보고서는 학습용 미니 프로젝트이며, 모델의 판정 결과를 실제 진단에 사용할 수 없습니다.</p>
+</section>
+
+<footer><div class="in">사용 도구: Python, scikit-learn (load_breast_cancer, KNeighborsClassifier, train_test_split, StandardScaler) · 송예진</div></footer>
+
+<script>
+const RAW=[0.9211,0.9035,0.9298,0.9035,0.9123,0.9035,0.9298,0.9298,0.9386,0.9298,0.9386,0.9386,0.9474,0.9386,0.9298,0.9298,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9386,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9298,0.9211,0.9298,0.9298,0.9298,0.9211,0.9298,0.9298,0.9298,0.9298,0.9211,0.9211,0.9211,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9123,0.9211,0.9211,0.9211,0.9123,0.9211,0.9211,0.9211,0.9211,0.9211,0.9211,0.9211,0.9211,0.9211,0.9211];
+const SCL=[0.9386,0.9298,0.9825,0.9474,0.9561,0.9561,0.9737,0.9737,0.9737,0.9649,0.9737,0.9737,0.9737,0.9649,0.9737,0.9737,0.9825,0.9825,0.9737,0.9737,0.9649,0.9649,0.9561,0.9649,0.9649,0.9561,0.9474,0.9561,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9561,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9474,0.9561,0.9474,0.9474,0.9474,0.9561,0.9474,0.9474,0.9474,0.9561,0.9474,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9474,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561,0.9561];
+const W=720,H=300,L=48,R=16,T=16,B=36,YMIN=0.89,YMAX=0.99;
+const x=k=>L+(k-1)/99*(W-L-R);
+const y=v=>T+(YMAX-v)/(YMAX-YMIN)*(H-T-B);
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("chart");
+const el=(tag,attrs,parent=svg)=>{const e=document.createElementNS(NS,tag);for(const a in attrs)e.setAttribute(a,attrs[a]);parent.appendChild(e);return e};
+
+const region=el("rect",{class:"region",y:T,height:H-T-B,rx:4});
+const axis=el("g",{class:"axis"});
+for(let v=0.90;v<=0.981;v+=0.02){
+  el("line",{class:"grid",x1:L,x2:W-R,y1:y(v),y2:y(v)});
+  const t=el("text",{x:L-8,y:y(v)+4,"text-anchor":"end"},axis);t.textContent=(v*100).toFixed(0)+"%";
+}
+[1,10,20,30,40,50,60,70,80,90,100].forEach(k=>{const t=el("text",{x:x(k),y:H-B+20,"text-anchor":"middle"},axis);t.textContent=k;});
+const xl=el("text",{x:W-R,y:H-4,"text-anchor":"end"},axis);xl.textContent="k (n_neighbors)";
+
+const path=d=>d.map((v,i)=>(i?"L":"M")+x(i+1).toFixed(1)+" "+y(v).toFixed(1)).join(" ");
+const sclPath=el("path",{class:"scl",d:path(SCL)});
+el("path",{class:"raw",d:path(RAW)});
+el("circle",{class:"best",cx:x(13),cy:y(RAW[12]),r:6});
+const cursor=el("line",{class:"cursor",y1:T,y2:H-B});
+const dotS=el("circle",{class:"dot-scl",r:4.5});
+const dotR=el("circle",{class:"dot-raw",r:4.5});
+
+const STEPS=[
+  {from:1,to:8,k:1,scaled:false},
+  {from:9,to:30,k:13,scaled:false},
+  {from:31,to:100,k:80,scaled:false},
+  {from:null,to:null,k:17,scaled:true}
+];
+const range=document.getElementById("kRange");
+const kOut=document.getElementById("kOut"),accRaw=document.getElementById("accRaw"),accScl=document.getElementById("accScl");
+const tabs=[...document.querySelectorAll(".seg button")],arts=[...document.querySelectorAll(".copy article")];
+const scrolly=document.getElementById("scrolly"),bar=document.getElementById("bar");
+const pct=v=>(v*100).toFixed(2)+"%";
+let current=-1,showScaled=false;
+
+function setK(k){
+  range.value=k;
+  kOut.textContent="k = "+k;
+  accRaw.firstChild.nodeValue=pct(RAW[k-1]);
+  accScl.firstChild.nodeValue=pct(SCL[k-1]);
+  accScl.hidden=!showScaled;
+  cursor.setAttribute("x1",x(k));cursor.setAttribute("x2",x(k));
+  dotR.setAttribute("cx",x(k));dotR.setAttribute("cy",y(RAW[k-1]));
+  dotS.setAttribute("cx",x(k));dotS.setAttribute("cy",y(SCL[k-1]));
+  dotS.style.display=showScaled?"":"none";
+}
+function setStep(i){
+  if(i===current)return;
+  current=i;const s=STEPS[i];
+  tabs.forEach((b,j)=>b.setAttribute("aria-selected",j===i?"true":"false"));
+  arts.forEach((a,j)=>a.classList.toggle("on",j===i));
+  showScaled=s.scaled;
+  sclPath.style.opacity=showScaled?1:0;
+  if(s.from){region.style.opacity=1;region.setAttribute("x",x(s.from)-4);region.setAttribute("width",x(s.to)-x(s.from)+8);}
+  else region.style.opacity=0;
+  setK(s.k);
+}
+function onScroll(){
+  const r=scrolly.getBoundingClientRect();
+  const span=r.height-window.innerHeight;
+  const p=Math.min(1,Math.max(0,-r.top/span));
+  bar.style.width=(p*100)+"%";
+  setStep(Math.min(STEPS.length-1,Math.floor(p*STEPS.length)));
+}
+let ticking=false;
+window.addEventListener("scroll",()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{onScroll();ticking=false;});}},{passive:true});
+window.addEventListener("resize",onScroll);
+tabs.forEach((b,i)=>b.addEventListener("click",()=>{
+  const top=scrolly.getBoundingClientRect().top+window.scrollY;
+  const span=scrolly.offsetHeight-window.innerHeight;
+  window.scrollTo({top:top+span*(i+0.5)/STEPS.length,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+}));
+range.addEventListener("input",()=>setK(+range.value));
+setStep(0);onScroll();
+
+// 숫자 카운트업: 화면에 들어올 때 한 번만
+(function(){
+  const targets=[...document.querySelectorAll(".cm .cell b")];
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce||!("IntersectionObserver" in window))return;
+  const NUM=/\d+(?:\.\d+)?/g;
+  targets.forEach(el=>{
+    const tpl=el.textContent;
+    const nums=(tpl.match(NUM)||[]).map(s=>({v:parseFloat(s),d:(s.split(".")[1]||"").length}));
+    el._tpl=tpl;el._nums=nums;
+    el.textContent=render(el,0);
+  });
+  function render(el,t){
+    let i=0;
+    return el._tpl.replace(NUM,()=>{const n=el._nums[i++];return (n.v*t).toFixed(n.d);});
+  }
+  const ease=t=>1-Math.pow(1-t,3);
+  function run(el){
+    const dur=1400,start=performance.now();
+    function frame(now){
+      const p=Math.min(1,(now-start)/dur);
+      el.textContent=render(el,ease(p));
+      if(p<1)requestAnimationFrame(frame);else el.textContent=el._tpl;
+    }
+    requestAnimationFrame(frame);
+  }
+  const io=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{if(e.isIntersecting){run(e.target);io.unobserve(e.target);}});
+  },{threshold:0.6});
+  targets.forEach(el=>io.observe(el));
+})();
+
+// 숫자 타일: 숫자는 그대로 두고 타일만 조용히 나타나게
+(function(){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches||!("IntersectionObserver" in window))return;
+  document.querySelectorAll(".tiles:not(.compare)").forEach(group=>{
+    const tiles=[...group.querySelectorAll(".tile")];
+    tiles.forEach((t,i)=>{t.classList.add("pre");t.style.transitionDelay=(i*0.08)+"s";});
+    const io=new IntersectionObserver(es=>{
+      es.forEach(e=>{if(e.isIntersecting){tiles.forEach(t=>t.classList.remove("pre"));io.disconnect();}});
+    },{threshold:0.3});
+    io.observe(group);
+  });
+})();
+
+// 결과: 114칸 정답 그리드 / 표준화: 화살표 연결
+(function(){
+  const ans=document.getElementById("answers"),grid=ans.querySelector(".grid");
+  for(let i=0;i<114;i++){
+    const c=document.createElement("i");
+    c.className=i<108?"ok":"bad";
+    c.style.transitionDelay=(i*7)+"ms";
+    grid.appendChild(c);
+  }
+  const cmp=document.getElementById("compare");
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce||!("IntersectionObserver" in window)){ans.classList.add("go");cmp.classList.add("go");return;}
+  cmp.classList.add("anim");
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("go");io.unobserve(e.target);}});
+  },{threshold:0.5});
+  io.observe(ans);
+  const io2=new IntersectionObserver(es=>{
+    es.forEach(e=>{if(e.isIntersecting){cmp.classList.add("go");io2.disconnect();}});
+  },{threshold:0.6});
+  io2.observe(cmp.querySelector(".tile"));
+})();
+</script>
+</body>
+</html>
